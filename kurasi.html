@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8" />
     <title>Form Kurasi IFP</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -21,6 +22,9 @@
         #submitBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
         #cancelBtn { background-color: var(--danger-color); color: white; }
         #cancelBtn:hover { background-color: #c82333; }
+        .notice { padding:10px;border-radius:6px;margin-top:8px; }
+        .notice.error { background:#ffe6e6;color:#900;border:1px solid #f5c2c2; }
+        .notice.info { background:#eefaf0;color:#1b6c3a;border:1px solid #d4efd6; }
     </style>
 </head>
 <body>
@@ -34,8 +38,15 @@
     </div>
 
     <script>
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxYrmCHAafei_NQerCeia256Q6KmNhUGjB7XlcxvuotXfL84b23zuFm5V-GyXZ1P7vx/exec'; // GANTI INI!
-        let currentPayload = {}; 
+        // ===== GANTI DENGAN URL WEB APP ANDA (deploy GAS: Anyone, even anonymous jika dari github.io) =====
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxYrmCHAafei_NQerCeia256Q6KmNhUGjB7XlcxvuotXfL84b23zuFm5V-GyXZ1P7vx/exec';
+        // =============================================================================================
+
+        let currentPayload = null;
+
+        function escapeHtml(s){
+            return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
 
         async function fetchKurasiPayload() {
             const row = localStorage.getItem('current_kurasi_row');
@@ -44,21 +55,25 @@
             if (!row || !kurator) {
                 alert('Data kurasi tidak ditemukan. Kembali ke halaman login.');
                 window.location.href = 'index.html';
-                return;
+                return null;
             }
 
             try {
-                const response = await fetch(WEB_APP_URL + `?action=fetchKurasiPayload&row=${row}`);
-                const payload = await response.json();
-                
-                if(payload.error){ throw new Error(payload.error); }
+                const res = await fetch(WEB_APP_URL + `?action=fetchKurasiPayload&row=${encodeURIComponent(row)}`, { method: 'GET', cache: 'no-cache' });
+                const json = await res.json();
 
-                currentPayload = { ...payload, kurator: kurator }; 
-                return currentPayload;
+                if (!json || json.status !== 'ok' || !json.data) {
+                    throw new Error(json && json.message ? json.message : 'Respons tidak valid dari server.');
+                }
+
+                // Gabungkan kurator untuk disimpan nanti
+                const payload = json.data;
+                payload.kurator = kurator;
+                return payload;
 
             } catch (e) {
                 console.error('Gagal mengambil payload:', e);
-                document.getElementById('meta').textContent = `Gagal memuat data: ${e.message}`;
+                document.getElementById('meta').innerHTML = `<div class="notice error">Gagal memuat data: ${escapeHtml(e.message || String(e))}</div>`;
                 return null;
             }
         }
@@ -66,45 +81,65 @@
         async function init() {
             const payload = await fetchKurasiPayload();
             if (!payload) return;
+            currentPayload = payload;
 
-            document.getElementById('meta').innerHTML = `<b>Baris:</b> ${payload.row} &nbsp; | &nbsp; <b>Kurator:</b> ${payload.kurator}`;
-            document.getElementById('contentMeta').innerHTML = `**Judul:** ${payload.meta.judul} | **Pengembang:** ${payload.meta.pengembang} | **Fase/Mapel:** ${payload.meta.fase}/${payload.meta.mapel}`;
+            document.getElementById('meta').innerHTML = `<b>Baris:</b> ${escapeHtml(String(payload.row))} &nbsp; | &nbsp; <b>Kurator:</b> ${escapeHtml(String(payload.kurator))}`;
+            document.getElementById('contentMeta').innerHTML = `**Judul:** ${escapeHtml(payload.meta && payload.meta.judul || '')} | **Pengembang:** ${escapeHtml(payload.meta && payload.meta.pengembang || '')} | **Fase/Mapel:** ${escapeHtml(payload.meta && payload.meta.fase || '')}/${escapeHtml(payload.meta && payload.meta.mapel || '')}`;
 
-            renderForm(payload.questions);
+            renderForm(payload.questions || []);
         }
 
         function renderForm(questions) {
             const area = document.getElementById('formArea');
             area.innerHTML = '';
-            if (!questions || questions.length === 0) { area.textContent = 'Tidak ada pertanyaan.'; return; }
+            if (!questions || questions.length === 0) {
+                area.innerHTML = '<div class="notice info">Tidak ada pertanyaan.</div>';
+                return;
+            }
             questions.forEach(function(q, idx) {
                 const wrapper = document.createElement('div'); wrapper.className = 'question';
                 const label = document.createElement('label'); label.textContent = `${idx + 1}. ${q}`; wrapper.appendChild(label);
+
                 const sel = document.createElement('select'); sel.name = 'q_' + idx;
-                ['', 'Ya', 'Tidak'].forEach(function(v) { const o = document.createElement('option'); o.value = v; o.text = v || '--Pilih--'; sel.appendChild(o); });
+                const ops = ['', 'Ya', 'Tidak'];
+                ops.forEach(function(v) { const o = document.createElement('option'); o.value = v; o.text = v || '--Pilih--'; sel.appendChild(o); });
                 wrapper.appendChild(sel);
+
                 const noteLabel = document.createElement('label'); noteLabel.textContent = 'Catatan (opsional):'; noteLabel.className = 'note-label';
                 wrapper.appendChild(noteLabel);
                 const ta = document.createElement('textarea'); ta.name = 'note_' + idx; wrapper.appendChild(ta);
+
                 area.appendChild(wrapper);
             });
         }
 
         async function submitKurasi() {
-            if (!currentPayload || !currentPayload.questions) { alert('Gagal memuat payload.'); return; }
-            
+            if (!currentPayload || !currentPayload.questions) {
+                alert('Data belum dimuat dengan benar.');
+                return;
+            }
+
+            // Kumpulkan jawaban dan catatan
             const questions = currentPayload.questions;
             const answers = questions.map(function(_, i) { const el = document.querySelector(`select[name="q_${i}"]`); return el ? el.value : ''; });
             const notes = questions.map(function(_, i) { const el = document.querySelector(`textarea[name="note_${i}"]`); return el ? el.value : ''; });
-            const komentar = ''; 
-            
-            for (var i = 0; i < answers.length; i++) { 
-                if (!answers[i]) { 
-                    if (!confirm(`Pertanyaan ke-${i + 1} belum dijawab. Lanjutkan?`)) return; 
-                } 
+            const komentar = ''; // jika mau sediakan input komentar bisa ditambahkan
+
+            // Konfirmasi jika ada jawaban kosong
+            for (let i = 0; i < answers.length; i++) {
+                if (!answers[i]) {
+                    if (!confirm(`Pertanyaan ke-${i + 1} belum dijawab. Lanjutkan pengiriman? (OK = lanjut, Cancel = periksa kembali)`)) {
+                        return;
+                    } else {
+                        break;
+                    }
+                }
             }
 
-            document.getElementById('submitBtn').disabled = true;
+            // Nonaktifkan tombol untuk mencegah double submit
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Menyimpan...';
 
             const submitData = {
                 action: 'processKurasi',
@@ -116,34 +151,49 @@
                     komentar: komentar
                 }
             };
-            
-            try {
-                const response = await fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' }, 
-                    body: JSON.stringify(submitData)
-                });
-                
-                const res = await response.json();
-                
-                if(res.error){ throw new Error(res.error); }
 
-                alert(`Tersimpan pada baris HasilKurasi: ${res.row}`);
+            try {
+                // NOTE: Jika Anda men-deploy frontend di github.io, POST ini bisa gagal karena CORS preflight.
+                // Jika dapat error CORS, gunakan proxy / Cloud Function yang menambahkan header CORS, atau host frontend di Apps Script.
+                const res = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(submitData),
+                    mode: 'cors' // tetap gunakan cors mode
+                });
+
+                // Jika response tidak JSON, nanti akan error di parsing
+                const json = await res.json();
+
+                if (!json) throw new Error('Respons tidak terduga dari server.');
+                if (json.status !== 'ok') {
+                    // jika ada pesan error dari server, tampilkan
+                    throw new Error(json.message || 'Server mengembalikan status error.');
+                }
+
+                // json.data adalah object yang dikembalikan processKurasiForRow
+                const savedInfo = json.data || {};
+                const savedRow = savedInfo.savedRow || savedInfo.row || savedInfo.saved_row || '(tidak tersedia)';
+
+                alert('Hasil kurasi tersimpan. Baris di HasilKurasi: ' + savedRow);
+                // bersihkan state dan kembali ke index
                 localStorage.removeItem('current_kurasi_row');
                 localStorage.removeItem('current_kurator_name');
                 window.location.href = 'index.html';
 
             } catch (e) {
-                alert(`Gagal menyimpan: ${e.message}`);
-                document.getElementById('submitBtn').disabled = false;
                 console.error('Submit error:', e);
+                alert('Gagal menyimpan hasil kurasi: ' + (e && e.message ? e.message : e));
+                // re-enable tombol
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Kirim Hasil Kurasi';
             }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('submitBtn').addEventListener('click', submitKurasi);
             document.getElementById('cancelBtn').addEventListener('click', function() {
-                if(confirm('Apakah Anda yakin ingin membatalkan dan kembali ke daftar?')){
+                if (confirm('Apakah Anda yakin ingin membatalkan dan kembali ke daftar?')) {
                     localStorage.removeItem('current_kurasi_row');
                     localStorage.removeItem('current_kurator_name');
                     window.location.href = 'index.html';
@@ -154,5 +204,3 @@
     </script>
 </body>
 </html>
-
-
