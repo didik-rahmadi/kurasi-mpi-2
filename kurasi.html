@@ -12,7 +12,7 @@
         #meta { background-color: #e9ecef; padding: 10px; margin-bottom: 15px; border-radius: 5px; font-size: 14px; color: #333; }
         .question { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 6px; background-color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         label { font-weight: 700; display: block; margin-bottom: 6px; color: #000; font-size: 15px; }
-        select { padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; width: 100%; margin-bottom: 8px; appearance: none; background: #fff url('data:image/svg+xml;utf8,<svg fill="%23444444" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>') no-repeat right 8px center; background-size: 12px; }
+        select { padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; width: 100%; margin-bottom: 8px; appearance: none; background: #fff; }
         textarea { width: 100%; height: 70px; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; resize: vertical; font-family: Arial, sans-serif; }
         .note-label { font-weight: 400 !important; color: #555; margin-top: 5px; font-size: 14px; }
         .actions { margin-top: 20px; text-align: right; }
@@ -38,55 +38,35 @@
     </div>
 
     <script>
-        // ===== GANTI DENGAN URL WEB APP ANDA (deploy GAS: Anyone, even anonymous jika dari github.io) =====
+        // GANTI DENGAN URL DEPLOY WEB APP ANDA
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxYrmCHAafei_NQerCeia256Q6KmNhUGjB7XlcxvuotXfL84b23zuFm5V-GyXZ1P7vx/exec';
-        // =============================================================================================
+
+        function escapeHtml(s){ return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
         let currentPayload = null;
-
-        function escapeHtml(s){
-            return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        }
 
         async function fetchKurasiPayload() {
             const row = localStorage.getItem('current_kurasi_row');
             const kurator = localStorage.getItem('current_kurator_name');
 
             if (!row || !kurator) {
-                alert('Data kurasi tidak ditemukan. Kembali ke halaman login.');
+                alert('Data kurasi tidak ditemukan. Kembali ke daftar.');
                 window.location.href = 'index.html';
                 return null;
             }
 
             try {
-                const res = await fetch(WEB_APP_URL + `?action=fetchKurasiPayload&row=${encodeURIComponent(row)}`, { method: 'GET', cache: 'no-cache' });
+                const res = await fetch(WEB_APP_URL + '?action=fetchKurasiPayload&row=' + encodeURIComponent(row), { method: 'GET', cache: 'no-cache' });
                 const json = await res.json();
-
-                if (!json || json.status !== 'ok' || !json.data) {
-                    throw new Error(json && json.message ? json.message : 'Respons tidak valid dari server.');
-                }
-
-                // Gabungkan kurator untuk disimpan nanti
+                if (!json || json.status !== 'ok' || !json.data) throw new Error(json && json.message ? json.message : 'Respons tidak valid');
                 const payload = json.data;
                 payload.kurator = kurator;
                 return payload;
-
             } catch (e) {
-                console.error('Gagal mengambil payload:', e);
                 document.getElementById('meta').innerHTML = `<div class="notice error">Gagal memuat data: ${escapeHtml(e.message || String(e))}</div>`;
+                console.error('fetchKurasiPayload error', e);
                 return null;
             }
-        }
-
-        async function init() {
-            const payload = await fetchKurasiPayload();
-            if (!payload) return;
-            currentPayload = payload;
-
-            document.getElementById('meta').innerHTML = `<b>Baris:</b> ${escapeHtml(String(payload.row))} &nbsp; | &nbsp; <b>Kurator:</b> ${escapeHtml(String(payload.kurator))}`;
-            document.getElementById('contentMeta').innerHTML = `**Judul:** ${escapeHtml(payload.meta && payload.meta.judul || '')} | **Pengembang:** ${escapeHtml(payload.meta && payload.meta.pengembang || '')} | **Fase/Mapel:** ${escapeHtml(payload.meta && payload.meta.fase || '')}/${escapeHtml(payload.meta && payload.meta.mapel || '')}`;
-
-            renderForm(payload.questions || []);
         }
 
         function renderForm(questions) {
@@ -101,11 +81,10 @@
                 const label = document.createElement('label'); label.textContent = `${idx + 1}. ${q}`; wrapper.appendChild(label);
 
                 const sel = document.createElement('select'); sel.name = 'q_' + idx;
-                const ops = ['', 'Ya', 'Tidak'];
-                ops.forEach(function(v) { const o = document.createElement('option'); o.value = v; o.text = v || '--Pilih--'; sel.appendChild(o); });
+                ['', 'Ya', 'Tidak'].forEach(function(v){ const o = document.createElement('option'); o.value = v; o.text = v || '--Pilih--'; sel.appendChild(o); });
                 wrapper.appendChild(sel);
 
-                const noteLabel = document.createElement('label'); noteLabel.textContent = 'Catatan (opsional):'; noteLabel.className = 'note-label';
+                const noteLabel = document.createElement('label'); noteLabel.className = 'note-label'; noteLabel.textContent = 'Catatan (opsional):';
                 wrapper.appendChild(noteLabel);
                 const ta = document.createElement('textarea'); ta.name = 'note_' + idx; wrapper.appendChild(ta);
 
@@ -113,35 +92,34 @@
             });
         }
 
+        async function init() {
+            const payload = await fetchKurasiPayload();
+            if (!payload) return;
+            currentPayload = payload;
+            document.getElementById('meta').innerHTML = `<b>Baris:</b> ${escapeHtml(String(payload.row))} &nbsp; | &nbsp; <b>Kurator:</b> ${escapeHtml(String(payload.kurator))}`;
+            document.getElementById('contentMeta').innerHTML = `**Judul:** ${escapeHtml(payload.meta && payload.meta.judul || '')} | **Pengembang:** ${escapeHtml(payload.meta && payload.meta.pengembang || '')} | **Fase/Mapel:** ${escapeHtml(payload.meta && payload.meta.fase || '')}/${escapeHtml(payload.meta && payload.meta.mapel || '')}`;
+            renderForm(payload.questions || []);
+        }
+
         async function submitKurasi() {
-            if (!currentPayload || !currentPayload.questions) {
-                alert('Data belum dimuat dengan benar.');
-                return;
-            }
+            if (!currentPayload || !currentPayload.questions) { alert('Data belum dimuat.'); return; }
 
-            // Kumpulkan jawaban dan catatan
-            const questions = currentPayload.questions;
-            const answers = questions.map(function(_, i) { const el = document.querySelector(`select[name="q_${i}"]`); return el ? el.value : ''; });
-            const notes = questions.map(function(_, i) { const el = document.querySelector(`textarea[name="note_${i}"]`); return el ? el.value : ''; });
-            const komentar = ''; // jika mau sediakan input komentar bisa ditambahkan
+            const answers = currentPayload.questions.map(function(_, i){ const el = document.querySelector(`select[name="q_${i}"]`); return el ? el.value : ''; });
+            const notes = currentPayload.questions.map(function(_, i){ const el = document.querySelector(`textarea[name="note_${i}"]`); return el ? el.value : ''; });
+            const komentar = '';
 
-            // Konfirmasi jika ada jawaban kosong
-            for (let i = 0; i < answers.length; i++) {
+            for (let i = 0; i < answers.length; i++){
                 if (!answers[i]) {
-                    if (!confirm(`Pertanyaan ke-${i + 1} belum dijawab. Lanjutkan pengiriman? (OK = lanjut, Cancel = periksa kembali)`)) {
-                        return;
-                    } else {
-                        break;
-                    }
+                    if (!confirm(`Pertanyaan ke-${i+1} belum dijawab. Lanjutkan pengiriman?`)) return;
+                    else break;
                 }
             }
 
-            // Nonaktifkan tombol untuk mencegah double submit
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.textContent = 'Menyimpan...';
 
-            const submitData = {
+            const payload = {
                 action: 'processKurasi',
                 payload: {
                     row: currentPayload.row,
@@ -153,47 +131,33 @@
             };
 
             try {
-                // NOTE: Jika Anda men-deploy frontend di github.io, POST ini bisa gagal karena CORS preflight.
-                // Jika dapat error CORS, gunakan proxy / Cloud Function yang menambahkan header CORS, atau host frontend di Apps Script.
                 const res = await fetch(WEB_APP_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(submitData),
-                    mode: 'cors' // tetap gunakan cors mode
+                    body: JSON.stringify(payload),
+                    mode: 'cors'
                 });
-
-                // Jika response tidak JSON, nanti akan error di parsing
                 const json = await res.json();
+                if (!json) throw new Error('Respons kosong');
+                if (json.status !== 'ok') throw new Error(json.message || 'Server error');
 
-                if (!json) throw new Error('Respons tidak terduga dari server.');
-                if (json.status !== 'ok') {
-                    // jika ada pesan error dari server, tampilkan
-                    throw new Error(json.message || 'Server mengembalikan status error.');
-                }
-
-                // json.data adalah object yang dikembalikan processKurasiForRow
-                const savedInfo = json.data || {};
-                const savedRow = savedInfo.savedRow || savedInfo.row || savedInfo.saved_row || '(tidak tersedia)';
-
+                const savedRow = (json.data && json.data.savedRow) ? json.data.savedRow : '(tidak tersedia)';
                 alert('Hasil kurasi tersimpan. Baris di HasilKurasi: ' + savedRow);
-                // bersihkan state dan kembali ke index
                 localStorage.removeItem('current_kurasi_row');
                 localStorage.removeItem('current_kurator_name');
                 window.location.href = 'index.html';
-
             } catch (e) {
-                console.error('Submit error:', e);
+                console.error('Submit error', e);
                 alert('Gagal menyimpan hasil kurasi: ' + (e && e.message ? e.message : e));
-                // re-enable tombol
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Kirim Hasil Kurasi';
             }
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function(){
             document.getElementById('submitBtn').addEventListener('click', submitKurasi);
-            document.getElementById('cancelBtn').addEventListener('click', function() {
-                if (confirm('Apakah Anda yakin ingin membatalkan dan kembali ke daftar?')) {
+            document.getElementById('cancelBtn').addEventListener('click', function(){
+                if (confirm('Batalkan kurasi dan kembali ke daftar?')) {
                     localStorage.removeItem('current_kurasi_row');
                     localStorage.removeItem('current_kurator_name');
                     window.location.href = 'index.html';
