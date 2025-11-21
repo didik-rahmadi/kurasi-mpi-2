@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        /* (Salin seluruh CSS yang dipercantik dari jawaban sebelumnya di buildLoginHtmlWithKurators) */
         :root { --primary-color: #007bff; --secondary-color: #6c757d; --success-color: #28a745; --border-color: #ccc; --bg-light: #f8f9fa; }
         body { font-family: 'Roboto', Arial, sans-serif; padding: 20px; background-color: var(--bg-light); }
         h3 { color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 5px; margin-bottom: 20px; }
@@ -39,17 +38,16 @@
     <div id="listArea" class="small">Pilih kurator lalu klik 'Muat Konten' atau pilih dari dropdown.</div>
 
     <script>
-        // PASTE URL WEB APP ANDA DI SINI!
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxYrmCHAafei_NQerCeia256Q6KmNhUGjB7XlcxvuotXfL84b23zuFm5V-GyXZ1P7vx/exec'; 
+        const WEB_APP_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE'; // GANTI INI!
 
-        // Fungsi Helper
         function escapeHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
         
-        // --- 1. Ambil Daftar Kurator ---
         async function fetchAndPopulateKurators() {
             try {
                 const response = await fetch(WEB_APP_URL + '?action=fetchKurators');
                 const kurators = await response.json();
+                
+                if(kurators.error){ throw new Error(kurators.error); }
                 
                 const sel = document.getElementById('kuratorSel');
                 sel.innerHTML = '<option value="">--Pilih--</option>';
@@ -60,11 +58,10 @@
                 });
             } catch (e) {
                 console.error('Gagal memuat daftar kurator:', e);
-                document.getElementById('listArea').textContent = 'Gagal memuat daftar kurator dari server.';
+                document.getElementById('listArea').innerHTML = '<div style="color:red; font-weight:bold">Gagal memuat daftar kurator dari server. Cek URL dan Izin Deployment (Anyone).</div>';
             }
         }
 
-        // --- 2. Muat Konten Tersedia ---
         async function loadContentsForKurator(name) {
             if (!name || name === '') { 
                 document.getElementById('listArea').innerHTML = 'Pilih kurator dulu.'; return; 
@@ -79,12 +76,11 @@
                 renderList(payload);
 
             } catch (e) {
-                document.getElementById('listArea').innerHTML = `<div style="color:red">Gagal memuat: ${e.message}</div>`;
+                document.getElementById('listArea').innerHTML = `<div style="color:red">Gagal memuat konten tersedia: ${e.message}</div>`;
                 console.error('fetchAvailableContents error', e);
             }
         }
 
-        // --- 3. Render Daftar ke Tabel ---
         function renderList(payload) {
             const area = document.getElementById('listArea');
             const info = document.getElementById('countInfo');
@@ -106,7 +102,6 @@
                 html += `<td>${escapeHtml(it.fase)}</td>`;
                 html += `<td>${escapeHtml(it.mapel)}</td>`;
                 html += `<td>${escapeHtml(it.judul)}</td>`;
-                // Pindah ke halaman kurasi baru dan kirim data via URL atau localStorage
                 html += `<td><button onclick="startKurasi(${it.row}, '${encodeURIComponent(payload.kurator)}')">Kurasi</button></td>`;
                 html += '</tr>';
             });
@@ -114,16 +109,13 @@
             area.innerHTML = html;
         }
         
-        // --- 4. Fungsi Mulai Kurasi ---
         function startKurasi(row, kuratorEnc){
             const kurator = decodeURIComponent(kuratorEnc);
-            // Simpan data kurator ke localStorage, lalu redirect ke halaman form
             localStorage.setItem('current_kurasi_row', row);
             localStorage.setItem('current_kurator_name', kurator);
-            window.location.href = 'kurasi.html'; // Anda harus buat file ini
+            window.location.href = 'kurasi.html'; 
         }
 
-        // Event Listeners
         document.addEventListener('DOMContentLoaded', function(){
             fetchAndPopulateKurators();
             const sel = document.getElementById('kuratorSel');
@@ -132,7 +124,4 @@
         });
     </script>
 </body>
-
 </html>
-
-
