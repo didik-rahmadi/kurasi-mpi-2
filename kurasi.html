@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        /* (Salin seluruh CSS yang dipercantik dari jawaban sebelumnya di buildKurasiHtml) */
         :root { --primary-color: #28a745; --danger-color: #dc3545; --bg-light: #f4f6f9; --border-color: #ced4da; }
         body { font-family: 'Roboto', Arial, sans-serif; padding: 15px; background-color: var(--bg-light); }
         h3 { color: #1e3a5f; margin-top: 0; padding-bottom: 5px; border-bottom: 2px solid #1e3a5f; }
@@ -27,7 +26,7 @@
 <body>
     <h3>📝 Form Kurasi</h3>
     <div id="meta">Memuat...</div>
-    <div id="contentMeta" style="font-style:italic; margin-bottom:15px"></div>
+    <div id="contentMeta" style="font-style:italic; margin-bottom:15px; border-bottom:1px dashed #ccc; padding-bottom:10px"></div>
     <div id="formArea"></div>
     <div class="actions">
         <button id="cancelBtn">Batal</button>
@@ -35,11 +34,9 @@
     </div>
 
     <script>
-        // PASTE URL WEB APP ANDA DI SINI!
-        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxYrmCHAafei_NQerCeia256Q6KmNhUGjB7XlcxvuotXfL84b23zuFm5V-GyXZ1P7vx/exec';
-        let currentPayload = {}; // Untuk menyimpan payload global
+        const WEB_APP_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE'; // GANTI INI!
+        let currentPayload = {}; 
 
-        // --- 1. Ambil Payload Kurasi ---
         async function fetchKurasiPayload() {
             const row = localStorage.getItem('current_kurasi_row');
             const kurator = localStorage.getItem('current_kurator_name');
@@ -51,13 +48,12 @@
             }
 
             try {
-                // Gunakan GET untuk mengambil pertanyaan dan detail konten
                 const response = await fetch(WEB_APP_URL + `?action=fetchKurasiPayload&row=${row}`);
                 const payload = await response.json();
                 
                 if(payload.error){ throw new Error(payload.error); }
 
-                currentPayload = { ...payload, kurator: kurator }; // Tambahkan kurator name dari localStorage
+                currentPayload = { ...payload, kurator: kurator }; 
                 return currentPayload;
 
             } catch (e) {
@@ -67,13 +63,12 @@
             }
         }
 
-        // --- 2. Inisialisasi dan Render Form ---
         async function init() {
             const payload = await fetchKurasiPayload();
             if (!payload) return;
 
             document.getElementById('meta').innerHTML = `<b>Baris:</b> ${payload.row} &nbsp; | &nbsp; <b>Kurator:</b> ${payload.kurator}`;
-            document.getElementById('contentMeta').innerHTML = `**Judul:** ${payload.meta.judul} | **Pengembang:** ${payload.meta.pengembang}`;
+            document.getElementById('contentMeta').innerHTML = `**Judul:** ${payload.meta.judul} | **Pengembang:** ${payload.meta.pengembang} | **Fase/Mapel:** ${payload.meta.fase}/${payload.meta.mapel}`;
 
             renderForm(payload.questions);
         }
@@ -95,14 +90,13 @@
             });
         }
 
-        // --- 3. Proses Kirim Data (POST) ---
         async function submitKurasi() {
             if (!currentPayload || !currentPayload.questions) { alert('Gagal memuat payload.'); return; }
             
             const questions = currentPayload.questions;
             const answers = questions.map(function(_, i) { const el = document.querySelector(`select[name="q_${i}"]`); return el ? el.value : ''; });
             const notes = questions.map(function(_, i) { const el = document.querySelector(`textarea[name="note_${i}"]`); return el ? el.value : ''; });
-            const komentar = ''; // Jika Anda ingin menambahkan field Komentar umum
+            const komentar = ''; 
             
             for (var i = 0; i < answers.length; i++) { 
                 if (!answers[i]) { 
@@ -126,7 +120,7 @@
             try {
                 const response = await fetch(WEB_APP_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' }, // Penting untuk Apps Script doPost
+                    headers: { 'Content-Type': 'text/plain' }, 
                     body: JSON.stringify(submitData)
                 });
                 
@@ -146,7 +140,6 @@
             }
         }
 
-        // Event Listeners
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('submitBtn').addEventListener('click', submitKurasi);
             document.getElementById('cancelBtn').addEventListener('click', function() {
@@ -160,7 +153,4 @@
         });
     </script>
 </body>
-
 </html>
-
-
